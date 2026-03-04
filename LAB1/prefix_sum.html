@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>二维前缀和算法可视化 (solution_3)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8fafc;
+            color: #334155;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        h1 { color: #1e293b; margin-bottom: 5px; }
+        p.subtitle { color: #64748b; margin-bottom: 30px; }
+        
+        .main-container {
+            display: flex;
+            gap: 50px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        .grid-wrapper {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .grid-title { font-weight: bold; margin-bottom: 15px; font-size: 1.1em; }
+        
+        .grid {
+            display: grid;
+            gap: 4px;
+        }
+        
+        .cell {
+            width: 45px;
+            height: 45px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #f1f5f9;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 1.1em;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        /* 坐标轴样式 */
+        .idx-cell { background-color: transparent; color: #94a3b8; font-size: 0.8em; font-weight: normal; }
+        
+        /* 颜色高亮类 */
+        .target { background-color: #3b82f6 !important; color: white !important; box-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
+        .area-add { background-color: #a7f3d0 !important; color: #064e3b; }
+        .area-sub { background-color: #fecdd3 !important; color: #881337; }
+        .area-intersect { background-color: #fde68a !important; color: #78350f; }
+        .pointer { border: 3px solid #10b981; transform: scale(1.1); z-index: 10; }
+
+        .control-panel {
+            margin-top: 30px;
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            width: 800px;
+            text-align: center;
+        }
+
+        .formula {
+            font-family: monospace;
+            background: #1e293b;
+            color: #10b981;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 1.2em;
+            margin: 15px 0;
+            transition: all 0.3s;
+        }
+
+        .explanation { font-size: 1.1em; min-height: 60px; line-height: 1.5; color: #475569; }
+
+        button {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            font-size: 1.1em;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin: 5px;
+        }
+        button:hover { background-color: #2563eb; }
+        button:disabled { background-color: #94a3b8; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+    <h1>🔍 二维前缀和算法可视化</h1>
+    <p class="subtitle">图解 `rowsum[r][c] - rowsum[x-1][c] - rowsum[r][y-1] + rowsum[x-1][y-1]`</p>
+
+    <div class="main-container">
+        <!-- 原矩阵 -->
+        <div class="grid-wrapper">
+            <div class="grid-title">原矩阵 matrix (4x4)</div>
+            <div id="matrix-grid" class="grid" style="grid-template-columns: repeat(5, 1fr);"></div>
+        </div>
+
+        <!-- 前缀和矩阵 -->
+        <div class="grid-wrapper">
+            <div class="grid-title">前缀和矩阵 rowsum (5x5, 包含第0行/列)</div>
+            <div id="prefix-grid" class="grid" style="grid-template-columns: repeat(6, 1fr);"></div>
+        </div>
+    </div>
+
+    <div class="control-panel">
+        <div class="explanation" id="explanation">
+            <strong>准备就绪。</strong><br>在这个例子中，我们要查询原矩阵中 <b>(2,2) 到 (3,3)</b> 构成的子矩阵之和。即 x=2, y=2, a=2, b=2。<br>点击“下一步”开始执行算法公式。
+        </div>
+        
+        <div class="formula" id="formula">
+            ans = rowsum[x+a-1][y+b-1] - rowsum[x-1][y+b-1] - rowsum[x+a-1][y-1] + rowsum[x-1][y-1]
+        </div>
+
+        <div>
+            <button id="prevBtn" onclick="prevStep()" disabled>上一步</button>
+            <button id="nextBtn" onclick="nextStep()">下一步</button>
+            <button onclick="resetAll()" style="background-color: #64748b;">重置</button>
+        </div>
+    </div>
+
+<script>
+    // 样本数据 (对应你的样例输入)
+    const rawData = [[1, 2, 3, 4],
+        [5, 6, 7, 8],[4, 3, 2, 1],
+        [9, 8, 7, 6]
+    ];
+    
+    // 生成带 0 边界的 5x5 前缀和数组
+    const prefixSum = Array(5).fill().map(() => Array(5).fill(0));
+    for (let i = 1; i <= 4; i++) {
+        for (let j = 1; j <= 4; j++) {
+            prefixSum[i][j] = prefixSum[i-1][j] + prefixSum[i][j-1] - prefixSum[i-1][j-1] + rawData[i-1][j-1];
+        }
+    }
+
+    // 初始化 UI 渲染
+    function initGrids() {
+        const mg = document.getElementById('matrix-grid');
+        const pg = document.getElementById('prefix-grid');
+        mg.innerHTML = ''; pg.innerHTML = '';
+
+        // 渲染原矩阵
+        mg.appendChild(createCell('', 'idx-cell'));
+        for(let j=1; j<=4; j++) mg.appendChild(createCell('y='+j, 'idx-cell'));
+        for(let i=1; i<=4; i++) {
+            mg.appendChild(createCell('x='+i, 'idx-cell'));
+            for(let j=1; j<=4; j++) {
+                mg.appendChild(createCell(rawData[i-1][j-1], 'm-cell', `m-${i}-${j}`));
+            }
+        }
+
+        // 渲染前缀和矩阵
+        pg.appendChild(createCell('', 'idx-cell'));
+        for(let j=0; j<=4; j++) pg.appendChild(createCell('c='+j, 'idx-cell'));
+        for(let i=0; i<=4; i++) {
+            pg.appendChild(createCell('r='+i, 'idx-cell'));
+            for(let j=0; j<=4; j++) {
+                pg.appendChild(createCell(prefixSum[i][j], 'p-cell', `p-${i}-${j}`));
+            }
+        }
+    }
+
+    function createCell(text, className, id = '') {
+        const div = document.createElement('div');
+        div.className = `cell ${className}`;
+        if(id) div.id = id;
+        div.innerText = text;
+        return div;
+    }
+
+    // 动画状态机设定
+    let step = 0;
+    const maxSteps = 5;
+    
+    // 目标查询：起点(2,2)，尺寸2x2。右下角为(3,3)。
+    const X=2, Y=2, R=3, C=3;
+
+    function updateUI() {
+        // 清理所有高亮样式
+        document.querySelectorAll('.cell').forEach(c => {
+            c.classList.remove('target', 'area-add', 'area-sub', 'area-intersect', 'pointer');
+        });
+        
+        const exp = document.getElementById('explanation');
+        const form = document.getElementById('formula');
+        
+        if (step >= 1) {
+            // 原矩阵高亮目标区域
+            for(let i=X; i<=R; i++) {
+                for(let j=Y; j<=C; j++) {
+                    document.getElementById(`m-${i}-${j}`).classList.add('target');
+                }
+            }
+        }
+
+        switch(step) {
+            case 0:
+                exp.innerHTML = "<strong>准备就绪。</strong><br>要查询原矩阵中 <b>(x=2,y=2)</b> 到 <b>(r=3,c=3)</b> 的子矩阵和（即元素 6+7+3+2 = 18）。<br>按“下一步”开始。";
+                form.innerHTML = "ans = rowsum[3][3] - rowsum[1][3] - rowsum[3][1] + rowsum[1][1]";
+                break;
+            case 1:
+                exp.innerHTML = "<strong>第一步：取大包含块。</strong><br>首先拿到 `rowsum[3][3]`，它代表从 (1,1) 到 (3,3) 的全部元素之和 (33)。它完全包含了我们的目标，但也包含了多余的部分。";
+                form.innerHTML = "ans = <span style='color: white; background: #10b981; padding: 0 4px;'>33</span> - rowsum[1][3] - rowsum[3][1] + rowsum[1][1]";
+                // 染色大区域
+                for(let i=1; i<=R; i++) for(let j=1; j<=C; j++) document.getElementById(`p-${i}-${j}`).classList.add('area-add');
+                document.getElementById(`p-3-3`).classList.add('pointer');
+                break;
+            case 2:
+                exp.innerHTML = "<strong>第二步：减去上方多余块。</strong><br>减去 `rowsum[1][3]`，它代表上方不需要的矩形面积之和 (6)。<br>当前结果 = 33 - 6 = 27。";
+                form.innerHTML = "ans = 33 - <span style='color: white; background: #e11d48; padding: 0 4px;'>6</span> - rowsum[3][1] + rowsum[1][1]";
+                for(let i=1; i<=X-1; i++) for(let j=1; j<=C; j++) document.getElementById(`p-${i}-${j}`).classList.add('area-sub');
+                document.getElementById(`p-1-3`).classList.add('pointer');
+                break;
+            case 3:
+                exp.innerHTML = "<strong>第三步：减去左侧多余块。</strong><br>接着减去 `rowsum[3][1]`，它代表左侧不需要的矩形面积之和 (10)。<br>当前结果 = 33 - 6 - 10 = 17。";
+                form.innerHTML = "ans = 33 - 6 - <span style='color: white; background: #e11d48; padding: 0 4px;'>10</span> + rowsum[1][1]";
+                for(let i=1; i<=R; i++) for(let j=1; j<=Y-1; j++) {
+                    const el = document.getElementById(`p-${i}-${j}`);
+                    if(el.classList.contains('area-sub')) el.classList.add('area-intersect');
+                    else el.classList.add('area-sub');
+                }
+                document.getElementById(`p-3-1`).classList.add('pointer');
+                break;
+            case 4:
+                exp.innerHTML = "<strong>第四步：加回重复减去的部分（容斥原理）。</strong><br>由于左上角的块（`rowsum[1][1]`=1）既在上方被减了一次，又在左侧被减了一次，多减了一次！<br>所以必须加回 `rowsum[1][1]`。";
+                form.innerHTML = "ans = 33 - 6 - 10 + <span style='color: #1e293b; background: #fde047; padding: 0 4px;'>1</span>";
+                for(let i=1; i<=X-1; i++) for(let j=1; j<=Y-1; j++) document.getElementById(`p-${i}-${j}`).classList.add('area-intersect');
+                document.getElementById(`p-1-1`).classList.add('pointer');
+                break;
+            case 5:
+                exp.innerHTML = "<strong>完成！🎊</strong><br>通过 4 次 O(1) 的加减法，我们得到了子矩阵的总和：18。<br>完美匹配原矩阵中 (6+7+3+2) 的结果！";
+                form.innerHTML = "ans = 33 - 6 - 10 + 1 = <b style='color: white; font-size: 1.5em;'>18</b>";
+                break;
+        }
+
+        document.getElementById('prevBtn').disabled = step === 0;
+        document.getElementById('nextBtn').disabled = step === maxSteps;
+    }
+
+    function nextStep() { if(step < maxSteps) { step++; updateUI(); } }
+    function prevStep() { if(step > 0) { step--; updateUI(); } }
+    function resetAll() { step = 0; updateUI(); }
+
+    window.onload = () => { initGrids(); updateUI(); };
+</script>
+</body>
+</html>
